@@ -233,7 +233,7 @@ class SDNE(ModelWithEmbeddings):
         self.optimizer.step()
         if self.decay:
             adjust_lr(self.optimizer, step, decay_strategy=self.lr)
-        self.debug_info = "total loss: {:.5f}, l1 loss: {:.5f}, l2 loss: {:.5f}".format(loss, float(l1), float(l2))
+        self.debug_info = "total loss: {:.5f}, l1 loss: {:.5f}, l2 loss: {:.5f}".format(loss.item(), l1.item(), l2.item())
 
     def _get_embeddings(self, graph, **kwargs):
         embeddings, _ = self.model(self.adj_mat)

@@ -13,16 +13,19 @@ from time import time
 
 
 class TopKRanker(OneVsRestClassifier):
-    def predict(self, X, top_k_list):
-        probs = torch.tensor(super(TopKRanker, self).predict_proba(numpy.asarray(X)))  # assume X as a Tensor
-        all_labels = []
+    def predict(self, X, top_k_list, n_classes=None):
+        proba = super(TopKRanker, self).predict_proba(numpy.asarray(X))
+        # When OVR is fit on a single-column (binary) target, predict_proba
+        # returns (n, 2) columns, but the binarizer only has 1 column.
+        # Use n_classes from the binarizer when available to match shapes.
+        if n_classes is None:
+            n_classes = proba.shape[1]
+        all_labels = numpy.zeros((len(top_k_list), n_classes), dtype=numpy.int32)
         for i, k in enumerate(top_k_list):
-            probs_ = probs[i, :]
-            labels = self.classes_[probs_.argsort()[-k:]].tolist()
-            probs_[:] = 0
-            probs_[labels] = 1          # mark top k labels
-            all_labels.append(probs_)
-        return torch.stack(all_labels)  # return a Tensor
+            # Only consider columns that map to binarizer classes
+            top_k_indices = numpy.argsort(proba[i, :n_classes])[-k:]
+            all_labels[i, top_k_indices] = 1
+        return all_labels  # return a 2D numpy int array
 
 
 class Classifier(object):
@@ -30,7 +33,7 @@ class Classifier(object):
     def __init__(self, vectors, clf, simple=False, silent=False):
         self.embeddings = vectors
         self.clf = TopKRanker(clf)
-        self.binarizer = MultiLabelBinarizer(sparse_output=True)
+        self.binarizer = MultiLabelBinarizer(sparse_output=False)
         if simple:
             self.f1cat = 2
         else:
@@ -45,8 +48,11 @@ class Classifier(object):
 
     def evaluate(self, X, Y):  # X Y tensor
         top_k_list = [len(l) for l in Y]
-        Y_ = self.predict(X, top_k_list)  # Y_ Tensor
-        Y = self.binarizer.transform(Y)  # Y  np array
+        Y = self.binarizer.transform(Y)  # Y np array
+        n_classes = len(self.binarizer.classes_)
+        Y_ = self.predict(X, top_k_list, n_classes=n_classes)
+        # Ensure both are the same dtype so sklearn detects them as the same type
+        Y = Y.astype(numpy.int32)
         averages = ["micro", "macro", "samples", "weighted"][:self.f1cat]
         results = {}
 
@@ -54,16 +60,16 @@ class Classifier(object):
             if self.silent:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
-                    results[average] = f1_score(Y, numpy.asarray(Y_), average=average)
+                    results[average] = f1_score(Y, Y_, average=average)
             else:
-                results[average] = f1_score(Y, numpy.asarray(Y_), average=average)
+                results[average] = f1_score(Y, Y_, average=average)
         if not self.silent:
             print(results)
         return results
 
-    def predict(self, X, top_k_list):
+    def predict(self, X, top_k_list, n_classes=None):
         X_ = torch.stack([self.embeddings[x] for x in X])
-        Y = self.clf.predict(X_, top_k_list=top_k_list)
+        Y = self.clf.predict(X_, top_k_list=top_k_list, n_classes=n_classes)
         return Y
 
     def train_and_evaluate(self, graph, train_percent, seed=None):

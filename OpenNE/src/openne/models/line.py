@@ -107,7 +107,7 @@ class _LINE(ModelWithEmbeddings):
                 sign = -1.
                 t = []
                 for i in range(len(h)):
-                    t.append(self.sampling_table[random.randint(0, table_size-1)])
+                    t.append(self.sampling_table[random.randint(0, int(table_size)-1)])
             sign = torch.tensor([sign], device=self._device)
             yield h, t, sign
             mod += 1
