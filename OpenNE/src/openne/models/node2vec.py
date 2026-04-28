@@ -29,11 +29,16 @@ class Node2vec(ModelWithEmbeddings):
         return kwargs
 
     def build(self, graph, *, path_length=80, num_paths=10, p=1.0, q=1.0, **kwargs):
+        self.args['workers'] = kwargs["workers"]
+
         if self.dw:
             self.args['hs'] = 1
+            self.args['negative'] = 0
             p = 1.0
             q = 1.0
-        self.args['workers'] = kwargs["workers"]
+        else:
+            self.args['hs'] = 0
+            self.args['negative'] = kwargs.get("negative_ratio", 5)
 
         if self.dw:
             self.walker = walker.BasicWalker(graph, workers=kwargs["workers"], silent=self.silent)
