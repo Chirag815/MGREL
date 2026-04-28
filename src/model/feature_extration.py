@@ -56,6 +56,7 @@ class AutoEncoder(nn.Module):
 
 # TODO: need to evaluate the decomposition efficiency      
 def train(model,ds:Dataset) -> None:
+    device = next(model.parameters()).device
     loader = DataLoader(ds, batch_size=args.batch_size, shuffle=False)
     
     optimizer = torch.optim.Adam(model.parameters(),lr=args.learning_rate)
@@ -67,10 +68,10 @@ def train(model,ds:Dataset) -> None:
     for epoch in range(args.epoch):
         loss=0
         for x in loader:
-
-            _, decoded = model.forward(x[0])
-            lossBatch = loss_func(decoded,x[0])
-            loss += lossBatch   
+            x_batch = x[0].to(device)
+            _, decoded = model.forward(x_batch)
+            lossBatch = loss_func(decoded, x_batch)
+            loss += lossBatch
             optimizer.zero_grad()
             lossBatch.backward()
             optimizer.step()
@@ -78,7 +79,7 @@ def train(model,ds:Dataset) -> None:
         trainInfo['loss'].append(loss)
             
         if epoch%50 == 0:
-            print('Epoch :', epoch,'|','train_loss:%.4f'%loss)
+            print('Epoch:', epoch, '|', 'train_loss:%.4f' % loss.item())
     print('________________________________________')
     print('finish training')
 
