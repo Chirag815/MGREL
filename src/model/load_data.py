@@ -140,7 +140,8 @@ def load_data_from_mat(skip:bool=False,save:bool=True) -> torch.Tensor:
         disease_network_matrix = disease_network_matrix - np.diag(np.ones(len(disease_network_matrix)))
 
         # edge_index, label and the feature matrix that will be used
-        edge_index = torch.tensor(comb.nonzero()) # 已经返回的是连接的位置了, shape=(2,1376654)
+        # edge_index = torch.tensor(comb.nonzero()) # 已经返回的是连接的位置了, shape=(2,1376654)
+        edge_index = torch.from_numpy(np.array(comb.nonzero()))
         label = torch.zeros(num_disease + num_gene)
         label[0:num_gene] = 1
         disease_feat_matrix = dis_feat.tocsc().toarray()
@@ -181,20 +182,49 @@ def make_data_for_openne(comb:np.array,label:np.array)->None:
     comb  <- load_data_from_mat()
     label <- load_data_from_mat()
     '''
-    # using networkx to make adjlist files -> OpenNE
-    # make gd_matrix = 0 to avoid data leak
-    comb[:12331,12331:] = 0
-    comb[12331:,:12331] = 0
-    G = nx.from_numpy_matrix(comb)
+    os.makedirs('OpenNE/GeneDis', exist_ok=True)
 
+    # --- derive sizes ---
+    num_nodes = comb.shape[0]
+    num_gene = int(label.sum().item())          # genes labeled as 1
+    num_disease = num_nodes - num_gene
+
+    # --- sanity check ---
+    assert comb.shape[0] == comb.shape[1], "Adjacency matrix must be square"
+    assert len(label) == num_nodes, "Label size mismatch"
+
+    # --- remove gene-disease edges (avoid leakage) ---
+    comb[:num_gene, num_gene:] = 0
+    comb[num_gene:, :num_gene] = 0
+
+    # --- full graph ---
+    G = nx.from_numpy_array(comb)
     nx.write_adjlist(G, 'OpenNE/GeneDis/adj.adjlist')
-    print('adjlist file has been made into: OpenNE/GeneDis/adj.adjlist')
-            
-    # network -> labels.txt -> OpenNE
-    with open('OpenNE/GeneDis/labels.txt','w') as f:
-        for i,r in enumerate(label):
-            f.write('{} {}\n'.format(i,r.item()))
-    print('labels.txt file has been made into: OpenNE/GeneDis/labels.txt')
+    print('adj.adjlist created')
+
+    # --- gene-gene graph ---
+    gg = sp.load_npz('data/gg.npz')
+    nx.write_adjlist(
+        nx.from_scipy_sparse_array(gg),
+        'OpenNE/GeneDis/adj_gg.adjlist'
+    )
+    print('adj_gg.adjlist created')
+
+    # --- disease-disease graph ---
+    dd = sp.load_npz('data/dd.npz')
+    nx.write_adjlist(
+        nx.from_scipy_sparse_array(dd),
+        'OpenNE/GeneDis/adj_dd.adjlist'
+    )
+    print('adj_dd.adjlist created')
+
+    # --- full labels ---
+    with open('OpenNE/GeneDis/labels.txt', 'w') as f:
+        for i, r in enumerate(label):
+            f.write(f'{i} {int(r.item())}\n')
+    print('labels.txt created')
+
+
 
 
 # TODO: 随机选择20%的数据作为模型发现新基因的能力的样本集，20%不参与训练和验证，直接从全集中抽取，并进行掩盖
