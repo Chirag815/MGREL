@@ -4,6 +4,7 @@ refer to Dataset of CogDL
 from abc import ABC
 
 from torch.utils.data import Dataset
+import torch
 import collections
 import os.path as osp
 import networkx as nx
@@ -110,7 +111,7 @@ class Graph(Dataset, ABC):
         Y = []
         for i in self.G.nodes:
             X.append(i)
-            Y.append(self.G.nodes[i]['label'])
+            Y.append(self.G.nodes[i].get('label', ['0']))
         return X, Y
 
     @property
